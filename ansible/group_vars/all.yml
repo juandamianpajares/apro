@@ -1,0 +1,75 @@
+---
+# Global variables for all hosts
+
+# System configuration
+system:
+  timezone: "America/Buenos_Aires"
+  locale: "en_US.UTF-8"
+  keyboard_layout: "us"
+
+# Network configuration
+network:
+  dns_servers:
+    - 1.1.1.1
+    - 1.0.0.1
+    - 8.8.8.8
+  ntp_servers:
+    - 0.pool.ntp.org
+    - 1.pool.ntp.org
+    - 2.pool.ntp.org
+
+# Security configuration
+security:
+  ssh_port: 22
+  fail2ban_enabled: true
+  auto_updates_enabled: true
+  selinux_state: enforcing  # enforcing, permissive, disabled
+  firewall: ufw  # ufw or firewalld
+
+# User management
+users:
+  admin_user: admin
+  admin_groups:
+    - sudo
+    - docker
+    - wheel
+
+# Monitoring
+monitoring:
+  prometheus_enabled: true
+  node_exporter_port: 9100
+  grafana_enabled: true
+  loki_enabled: true
+
+# Backup
+backup:
+  borg_enabled: true
+  backup_schedule: "0 2 * * *"  # Daily at 2 AM
+  retention_days: 30
+  offsite_replication: true
+
+# Docker configuration
+docker:
+  version: latest
+  compose_version: "2.24.0"
+  daemon_config:
+    log_driver: json-file
+    log_opts:
+      max_size: "10m"
+      max_file: "3"
+
+# Package repositories
+repositories:
+  update_cache: true
+  upgrade_packages: true
+
+# Logging
+logging:
+  syslog_server: "{{ hostvars['monitor01']['ansible_host'] | default('') }}"
+  log_level: info
+
+# Tags for cloud providers
+tags:
+  project: apro
+  managed_by: ansible
+  environment: production

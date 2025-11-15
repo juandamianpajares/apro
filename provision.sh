@@ -1,9 +1,10 @@
 #!/bin/bash
 
 #===============================================================================
-# Script de Aprovisionamiento Hardened para Servidores Linux
-# Soporta: Debian 14, Ubuntu 25, y otras distribuciones modernas
-# Incluye: Hardening de seguridad, configuración de red y firewall
+# Script de Aprovisionamiento Hardened para Servidores Linux (APRO v3.0)
+# Soporta: Debian 11+, Ubuntu 20.04+, Rocky Linux 8/9, AlmaLinux 8/9, Arch Linux
+# Incluye: Hardening de seguridad, configuración de red, firewall y proyectos
+# Proyecto: https://github.com/juandamianpajares/apro
 #===============================================================================
 
 set -euo pipefail
@@ -97,6 +98,25 @@ detect_os() {
                     warn "Ubuntu $OS_VERSION puede no estar completamente soportado. Se recomienda Ubuntu 20.04 o superior."
                 fi
                 ;;
+            rocky|almalinux)
+                if [ "${OS_VERSION%%.*}" -lt 8 ]; then
+                    warn "Rocky/AlmaLinux $OS_VERSION puede no estar completamente soportado. Se recomienda versión 8 o superior."
+                else
+                    log "✓ Rocky/AlmaLinux $OS_VERSION detectado - RHEL compatible"
+                fi
+                ;;
+            rhel)
+                if [ "${OS_VERSION%%.*}" -lt 8 ]; then
+                    warn "RHEL $OS_VERSION puede no estar completamente soportado. Se recomienda RHEL 8 o superior."
+                fi
+                ;;
+            centos)
+                if [ "${OS_VERSION%%.*}" -eq 8 ]; then
+                    warn "CentOS 8 ha alcanzado EOL. Se recomienda migrar a Rocky Linux o AlmaLinux."
+                elif [ "${OS_VERSION%%.*}" -lt 7 ]; then
+                    warn "CentOS $OS_VERSION no está soportado. Use CentOS 7+ o Rocky/AlmaLinux 8+."
+                fi
+                ;;
         esac
     elif [ -f /etc/arch-release ]; then
         OS="arch"
@@ -104,9 +124,9 @@ detect_os() {
     else
         warn "No se pudo detectar automáticamente la distribución de Linux."
         while true; do
-            read -r -p "Por favor, introduce tu distribución (debian, ubuntu, arch, centos, rhel, fedora): " MANUAL_OS
+            read -r -p "Por favor, introduce tu distribución (debian, ubuntu, arch, rocky, almalinux, centos, rhel, fedora): " MANUAL_OS
             MANUAL_OS=$(echo "$MANUAL_OS" | tr '[:upper:]' '[:lower:]')
-            if [[ "$MANUAL_OS" =~ ^(debian|ubuntu|arch|centos|rhel|fedora)$ ]]; then
+            if [[ "$MANUAL_OS" =~ ^(debian|ubuntu|arch|rocky|almalinux|centos|rhel|fedora)$ ]]; then
                 OS="$MANUAL_OS"
                 OS_VERSION="manual"
                 break
@@ -119,7 +139,7 @@ detect_os() {
     # Normalización del nombre del OS
     case "$OS" in
         archlinux) OS="arch" ;;
-        centos|rhel|fedora) OS="rhel_family" ;;
+        centos|rhel|fedora|rocky|almalinux) OS="rhel_family" ;;
     esac
 }
 

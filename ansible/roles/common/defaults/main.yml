@@ -1,0 +1,40 @@
+---
+# Default variables for common role
+
+common_packages:
+  - git
+  - curl
+  - wget
+  - vim
+  - htop
+  - tree
+  - rsync
+  - unzip
+  - tar
+  - net-tools
+  - bind-utils
+  - openssl
+  - ca-certificates
+
+services_to_disable:
+  - bluetooth
+  - cups
+  - avahi-daemon
+
+system_limits:
+  - domain: "*"
+    limit_type: soft
+    limit_item: nofile
+    value: 65536
+  - domain: "*"
+    limit_type: hard
+    limit_item: nofile
+    value: 65536
+  - domain: "*"
+    limit_type: soft
+    limit_item: nproc
+    value: 32768
+  - domain: "*"
+    limit_type: hard
+    limit_item: nproc
+    value: 32768

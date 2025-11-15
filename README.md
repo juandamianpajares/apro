@@ -1,6 +1,6 @@
-# Script de Aprovisionamiento Hardened v2.0
+# APRO - Advanced Provisioning & Orchestration v3.0
 
-Script completo de aprovisionamiento para servidores Linux con hardening de seguridad, soporte para Debian 14, Ubuntu 25, y configuración automática de proyectos.
+Sistema integral de aprovisionamiento, configuración y gestión de infraestructura que abarca desde servidores en producción hasta estaciones de trabajo especializadas, con enfoque en seguridad, automatización y observabilidad.
 
 ## 🚀 Características
 
@@ -28,9 +28,16 @@ Script completo de aprovisionamiento para servidores Linux con hardening de segu
 
 ## 📋 Requisitos
 
-- Debian 11+ / Ubuntu 20.04+ / Arch Linux
+### Servidores
+- **Debian** 11+ | **Ubuntu** 20.04 LTS+ | **Rocky Linux** 8/9 | **AlmaLinux** 8/9 | **Arch Linux**
 - Usuario con privilegios sudo
 - Conexión a Internet
+- Mínimo 2GB RAM, 20GB disco
+
+### Workstations
+- **Arch Linux** (recomendado para escritorios)
+- Mínimo 4GB RAM, 50GB disco
+- GPU compatible (para gaming desktop)
 
 ## 🔧 Uso Básico
 
@@ -347,8 +354,214 @@ Este script es de código abierto y puede ser usado libremente.
 
 ## 🎯 Roadmap
 
-- [ ] Soporte para más distribuciones (Alpine, Rocky Linux)
+### ✅ Fase 1: Fundamentos (Completado)
+- [x] Script provision.sh con multi-distro
+- [x] Soporte Rocky Linux 8/9
+- [x] Estructura base de Ansible
+- [x] Documentación de arquitectura
+
+### 🔄 Fase 2: Observabilidad (En Progreso)
+- [ ] Stack Prometheus + Grafana
+- [ ] Loki para logs centralizados
+- [ ] Exporters para métricas
+- [ ] Dashboards predefinidos
+- [ ] Sistema de alertas
+
+### 📋 Fase 3: Backup & Recovery
+- [ ] Borg Backup para servidores
+- [ ] Políticas de retención
+- [ ] Backup verification
+- [ ] Restore testing automatizado
+- [ ] Offsite replication
+
+### 📋 Fase 4: Terraform & Cloud
+- [ ] Módulos base para AWS
+- [ ] Soporte multi-cloud
+- [ ] State management
 - [ ] Integración con Ansible
-- [ ] Monitoreo con Prometheus/Grafana
-- [ ] Backup automático
-- [ ] Certificados SSL con Let's Encrypt
+
+### 📋 Fase 5: Workstations
+- [ ] DevOps Workstation (Arch)
+- [ ] Security Workstation (Kali/Arch)
+- [ ] Gaming Desktop (SteamOS/Chimera)
+
+Ver [ROADMAP completo](docs/ROADMAP.md) para más detalles.
+
+## 📚 Documentación
+
+### Documentos Principales
+- [📖 Visión General del Proyecto](docs/PROJECT_OVERVIEW.md) - Alcance, objetivos y principios
+- [🏗️ Arquitectura del Sistema](docs/APRO_ARCHITECTURE.md) - Diagramas y componentes
+- [🗺️ Roadmap Detallado](docs/ROADMAP.md) - Planificación por sprints
+- [📋 Quick Start](docs/QUICKSTART.md) - Guía de inicio rápido
+- [🔧 Troubleshooting](docs/TROUBLESHOOTING.md) - Solución de problemas
+
+### Ansible
+- [📘 Guía de Ansible](ansible/README.md) - Cómo usar los playbooks
+- [🎭 Roles Disponibles](ansible/roles/README.md) - Documentación de roles
+- [📦 Inventarios](ansible/inventories/README.md) - Gestión de hosts
+
+### Terraform (Próximamente)
+- Módulos para AWS, Azure, GCP
+- Ejemplos de uso
+- Best practices
+
+## 🛠️ Estructura del Proyecto
+
+```
+apro/
+├── ansible/                    # Automatización con Ansible
+│   ├── playbooks/             # Playbooks principales
+│   ├── roles/                 # Roles reutilizables
+│   │   ├── common/           # Configuración básica
+│   │   ├── hardening/        # Seguridad
+│   │   ├── docker/           # Contenedores
+│   │   ├── monitoring/       # Observabilidad
+│   │   └── backup/           # Respaldos
+│   ├── inventories/          # Inventarios de hosts
+│   └── group_vars/           # Variables globales
+├── terraform/                 # Infraestructura como código
+│   ├── modules/              # Módulos reutilizables
+│   └── environments/         # dev/stage/prod
+├── docker/                    # Stacks de Docker
+│   └── monitoring/           # Prometheus, Grafana, Loki
+├── scripts/                   # Scripts auxiliares
+│   └── provision.sh          # Bootstrap inicial
+└── docs/                      # Documentación
+    ├── architecture/         # Arquitectura
+    ├── diagrams/             # Diagramas
+    └── runbooks/             # Guías operativas
+```
+
+## 🚀 Quick Start
+
+### 1. Provisionar un servidor con el script bash
+
+```bash
+# Clonar repositorio
+git clone https://github.com/juandamianpajares/apro.git
+cd apro
+
+# Modo interactivo
+sudo bash provision.sh
+
+# Modo automático
+PROJECT_REPO_URL="git@github.com:user/repo.git" \
+PROJECT_ENVIRONMENT="prod" \
+SSH_PORT=2222 \
+sudo -E bash provision.sh
+```
+
+### 2. Usar Ansible (Recomendado)
+
+```bash
+# Instalar Ansible
+sudo apt install ansible  # Debian/Ubuntu
+sudo dnf install ansible  # Rocky/RHEL
+sudo pacman -S ansible    # Arch
+
+# Configurar inventario
+cd ansible
+cp inventories/production/hosts.yml.example inventories/production/hosts.yml
+# Editar hosts.yml con tus servidores
+
+# Ejecutar playbook completo
+ansible-playbook playbooks/site.yml
+
+# Ejecutar solo hardening
+ansible-playbook playbooks/site.yml --tags hardening
+
+# Provisionar solo servidores web
+ansible-playbook playbooks/site.yml --limit web_servers
+```
+
+### 3. Provisionar workstation DevOps (Próximamente)
+
+```bash
+ansible-playbook playbooks/workstation-devops.yml
+```
+
+## 🔐 Seguridad
+
+Este proyecto implementa:
+
+- ✅ **CIS Benchmarks** - Level 1 Server
+- ✅ **Kernel Hardening** - sysctl parameters
+- ✅ **SSH Hardening** - Solo claves, sin root, cifrado moderno
+- ✅ **Firewall** - UFW/Firewalld con reglas restrictivas
+- ✅ **Fail2Ban** - Protección contra brute-force
+- ✅ **SELinux/AppArmor** - Mandatory Access Control
+- ✅ **Auditd** - Logging de eventos de seguridad
+- ✅ **Automatic Updates** - Parches de seguridad automáticos
+
+Ver [Security Guidelines](docs/SECURITY.md) para más detalles.
+
+## 🤝 Contribuir
+
+¡Las contribuciones son bienvenidas! Por favor:
+
+1. Fork el proyecto
+2. Crea una branch para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la branch (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+Ver [CONTRIBUTING.md](CONTRIBUTING.md) para más detalles.
+
+## 📊 Estado del Proyecto
+
+| Componente | Estado | Cobertura | Notas |
+|------------|--------|-----------|-------|
+| provision.sh | ✅ Estable | 100% | Multi-distro |
+| Ansible Roles | 🔄 En Desarrollo | 60% | Core roles completos |
+| Monitoring | 📋 Planeado | 0% | Sprint 3-4 |
+| Backup | 📋 Planeado | 0% | Sprint 5-6 |
+| Terraform | 📋 Planeado | 0% | Sprint 7-8 |
+| Workstations | 📋 Planeado | 0% | Sprint 9-14 |
+
+## 🌟 Casos de Uso
+
+### 1. Startup Tech
+- Aprovisionamiento rápido de servidores
+- Infraestructura reproducible
+- Costos controlados con automatización
+
+### 2. Empresa Enterprise
+- Compliance automático (CIS, ISO27001)
+- Disaster recovery
+- Multi-datacenter
+
+### 3. Desarrollador Individual
+- Dev environment consistente
+- Workstation personalizada
+- Lab de testing
+
+### 4. Equipo de Seguridad
+- Pentesting workstation
+- Hardening automático
+- Audit logging centralizado
+
+## 📝 Licencia
+
+Este proyecto está bajo la licencia MIT. Ver [LICENSE](LICENSE) para más detalles.
+
+## 👨‍💻 Autor
+
+**Juan Damian Pajares**
+- GitHub: [@juandamianpajares](https://github.com/juandamianpajares)
+- Email: juandamianpajares@example.com
+
+## 🙏 Agradecimientos
+
+- Comunidad Open Source
+- Ansible Community
+- HashiCorp
+- CIS Benchmarks
+- Linux Foundation
+
+---
+
+**⭐ Si este proyecto te resulta útil, considera darle una estrella en GitHub!**
+
+**Version**: 3.0.0
+**Last Updated**: 2025-01-15

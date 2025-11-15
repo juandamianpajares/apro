@@ -1,0 +1,56 @@
+---
+# Main playbook for APRO infrastructure
+
+- name: Bootstrap all hosts
+  hosts: all
+  gather_facts: yes
+  tags: [bootstrap]
+  roles:
+    - common
+
+- name: Configure servers
+  hosts: servers
+  gather_facts: yes
+  tags: [servers]
+  roles:
+    - common
+    - hardening
+    - docker
+    - monitoring
+    - backup
+
+- name: Configure workstations
+  hosts: workstations
+  gather_facts: yes
+  tags: [workstations]
+  roles:
+    - common
+    - hardening
+    - workstation
+
+- name: Setup monitoring infrastructure
+  hosts: monitoring_servers
+  gather_facts: yes
+  tags: [monitoring]
+  roles:
+    - monitoring.prometheus
+    - monitoring.grafana
+    - monitoring.loki
+
+- name: Setup backup infrastructure
+  hosts: backup_servers
+  gather_facts: yes
+  tags: [backup]
+  roles:
+    - backup.borg-server
+
+- name: Configure database servers
+  hosts: db_servers
+  gather_facts: yes
+  tags: [database]
+  roles:
+    - common
+    - hardening
+    - monitoring
+    - backup
+    - database

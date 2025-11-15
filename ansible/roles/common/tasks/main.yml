@@ -1,0 +1,148 @@
+---
+# Common role - Basic system configuration for all hosts
+
+- name: Detect OS distribution
+  setup:
+    filter: ansible_os_family
+  tags: [always]
+
+- name: Set distribution-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution }}.yml"
+    - "{{ ansible_os_family }}.yml"
+    - "default.yml"
+  tags: [always]
+
+- name: Update package cache (Debian/Ubuntu)
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+  tags: [packages]
+
+- name: Update package cache (RedHat/Rocky)
+  dnf:
+    update_cache: yes
+  when: ansible_os_family == "RedHat"
+  tags: [packages]
+
+- name: Update package cache (Arch)
+  pacman:
+    update_cache: yes
+  when: ansible_os_family == "Archlinux"
+  tags: [packages]
+
+- name: Install essential packages (Debian/Ubuntu)
+  apt:
+    name: "{{ common_packages }}"
+    state: present
+  when: ansible_os_family == "Debian"
+  tags: [packages]
+
+- name: Install essential packages (RedHat/Rocky)
+  dnf:
+    name: "{{ common_packages }}"
+    state: present
+  when: ansible_os_family == "RedHat"
+  tags: [packages]
+
+- name: Install essential packages (Arch)
+  pacman:
+    name: "{{ common_packages }}"
+    state: present
+  when: ansible_os_family == "Archlinux"
+  tags: [packages]
+
+- name: Set timezone
+  timezone:
+    name: "{{ system.timezone }}"
+  tags: [system]
+
+- name: Configure locale
+  locale_gen:
+    name: "{{ system.locale }}"
+    state: present
+  when: ansible_os_family == "Debian" or ansible_os_family == "Archlinux"
+  tags: [system]
+
+- name: Set hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+  tags: [system]
+
+- name: Configure /etc/hosts
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: '0644'
+  tags: [system]
+
+- name: Create admin user
+  user:
+    name: "{{ users.admin_user }}"
+    groups: "{{ users.admin_groups }}"
+    shell: /bin/bash
+    create_home: yes
+    state: present
+  tags: [users]
+
+- name: Setup SSH directory for admin user
+  file:
+    path: "/home/{{ users.admin_user }}/.ssh"
+    state: directory
+    owner: "{{ users.admin_user }}"
+    group: "{{ users.admin_user }}"
+    mode: '0700'
+  tags: [users, ssh]
+
+- name: Configure NTP servers
+  template:
+    src: timesyncd.conf.j2
+    dest: /etc/systemd/timesyncd.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart timesyncd
+  when: ansible_service_mgr == "systemd"
+  tags: [system, ntp]
+
+- name: Start and enable timesyncd
+  systemd:
+    name: systemd-timesyncd
+    state: started
+    enabled: yes
+  when: ansible_service_mgr == "systemd"
+  tags: [system, ntp]
+
+- name: Configure DNS resolvers
+  template:
+    src: resolved.conf.j2
+    dest: /etc/systemd/resolved.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart resolved
+  when: ansible_service_mgr == "systemd"
+  tags: [system, dns]
+
+- name: Disable unnecessary services
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+  loop: "{{ services_to_disable }}"
+  failed_when: false
+  tags: [system, services]
+
+- name: Set system limits
+  template:
+    src: limits.conf.j2
+    dest: /etc/security/limits.d/99-custom.conf
+    owner: root
+    group: root
+    mode: '0644'
+  tags: [system, limits]

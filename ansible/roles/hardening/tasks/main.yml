@@ -1,0 +1,216 @@
+---
+# Hardening role - Security hardening for all servers
+
+- name: Include OS-specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}.yml"
+    - "{{ ansible_distribution }}.yml"
+    - "{{ ansible_os_family }}.yml"
+    - "default.yml"
+  tags: [always]
+
+# Kernel hardening
+- name: Apply kernel hardening parameters
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-hardening.conf
+    reload: yes
+  loop: "{{ kernel_hardening_params }}"
+  tags: [kernel, hardening]
+
+# SSH hardening
+- name: Backup original SSH config
+  copy:
+    src: /etc/ssh/sshd_config
+    dest: "/etc/ssh/sshd_config.bak.{{ ansible_date_time.epoch }}"
+    remote_src: yes
+  tags: [ssh, hardening]
+
+- name: Configure hardened SSH
+  template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: restart sshd
+  tags: [ssh, hardening]
+
+- name: Ensure SSH directory exists for root
+  file:
+    path: /root/.ssh
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  tags: [ssh]
+
+# Firewall configuration
+- name: Install UFW (Debian/Ubuntu)
+  apt:
+    name: ufw
+    state: present
+  when:
+    - ansible_os_family == "Debian"
+    - security.firewall == "ufw"
+  tags: [firewall]
+
+- name: Install firewalld (RedHat/Rocky)
+  dnf:
+    name: firewalld
+    state: present
+  when:
+    - ansible_os_family == "RedHat"
+    - security.firewall == "firewalld"
+  tags: [firewall]
+
+- name: Configure UFW
+  include_tasks: ufw.yml
+  when: security.firewall == "ufw"
+  tags: [firewall, ufw]
+
+- name: Configure firewalld
+  include_tasks: firewalld.yml
+  when: security.firewall == "firewalld"
+  tags: [firewall, firewalld]
+
+# Fail2Ban
+- name: Install Fail2Ban
+  package:
+    name: fail2ban
+    state: present
+  when: security.fail2ban_enabled
+  tags: [fail2ban, hardening]
+
+- name: Configure Fail2Ban
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart fail2ban
+  when: security.fail2ban_enabled
+  tags: [fail2ban, hardening]
+
+- name: Start and enable Fail2Ban
+  systemd:
+    name: fail2ban
+    state: started
+    enabled: yes
+  when: security.fail2ban_enabled
+  tags: [fail2ban, hardening]
+
+# SELinux (RedHat/Rocky)
+- name: Ensure SELinux is in desired state
+  selinux:
+    policy: targeted
+    state: "{{ security.selinux_state }}"
+  when: ansible_os_family == "RedHat"
+  tags: [selinux, hardening]
+
+# AppArmor (Debian/Ubuntu)
+- name: Install AppArmor
+  apt:
+    name:
+      - apparmor
+      - apparmor-utils
+    state: present
+  when: ansible_os_family == "Debian"
+  tags: [apparmor, hardening]
+
+- name: Start and enable AppArmor
+  systemd:
+    name: apparmor
+    state: started
+    enabled: yes
+  when: ansible_os_family == "Debian"
+  tags: [apparmor, hardening]
+
+# Audit daemon
+- name: Install auditd
+  package:
+    name: "{{ auditd_package }}"
+    state: present
+  tags: [audit, hardening]
+
+- name: Configure audit rules
+  template:
+    src: audit.rules.j2
+    dest: /etc/audit/rules.d/hardening.rules
+    owner: root
+    group: root
+    mode: '0640'
+  notify: restart auditd
+  tags: [audit, hardening]
+
+- name: Start and enable auditd
+  systemd:
+    name: auditd
+    state: started
+    enabled: yes
+  tags: [audit, hardening]
+
+# Automatic updates
+- name: Configure automatic security updates (Debian/Ubuntu)
+  include_tasks: auto-updates-debian.yml
+  when:
+    - ansible_os_family == "Debian"
+    - security.auto_updates_enabled
+  tags: [updates, hardening]
+
+- name: Configure automatic security updates (RedHat/Rocky)
+  include_tasks: auto-updates-redhat.yml
+  when:
+    - ansible_os_family == "RedHat"
+    - security.auto_updates_enabled
+  tags: [updates, hardening]
+
+# Disable root login
+- name: Disable root password login
+  user:
+    name: root
+    password: '!'
+  tags: [hardening, users]
+
+# Remove unnecessary packages
+- name: Remove unnecessary packages (Debian/Ubuntu)
+  apt:
+    name: "{{ packages_to_remove }}"
+    state: absent
+    purge: yes
+  when: ansible_os_family == "Debian"
+  failed_when: false
+  tags: [hardening, packages]
+
+# Secure shared memory
+- name: Secure shared memory
+  mount:
+    path: /run/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: defaults,noexec,nodev,nosuid,size=2G
+    state: mounted
+  tags: [hardening, filesystem]
+
+# Disable core dumps
+- name: Disable core dumps
+  pam_limits:
+    domain: "*"
+    limit_type: hard
+    limit_item: core
+    value: "0"
+  tags: [hardening, security]
+
+- name: Disable core dumps in sysctl
+  sysctl:
+    name: fs.suid_dumpable
+    value: '0'
+    state: present
+    sysctl_file: /etc/sysctl.d/99-hardening.conf
+    reload: yes
+  tags: [hardening, security]
