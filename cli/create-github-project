@@ -1,0 +1,344 @@
+#!/bin/bash
+
+#===============================================================================
+# Create GitHub Project - Crea GitHub Project y popula con issues del backlog
+# Requiere: gh CLI (GitHub CLI)
+#===============================================================================
+
+set -euo pipefail
+
+# Colores
+readonly GREEN='\033[0;32m'
+readonly RED='\033[0;31m'
+readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
+readonly YELLOW='\033[1;33m'
+readonly BOLD='\033[1m'
+readonly NC='\033[0m'
+
+#===============================================================================
+# Funciones
+#===============================================================================
+
+log() {
+    echo -e "${GREEN}✓ $1${NC}"
+}
+
+error() {
+    echo -e "${RED}✗ ERROR: $1${NC}" >&2
+}
+
+info() {
+    echo -e "${BLUE}ℹ $1${NC}"
+}
+
+warn() {
+    echo -e "${YELLOW}⚠ $1${NC}"
+}
+
+show_banner() {
+    clear
+    cat <<'EOF'
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║        🚀 GITHUB PROJECT CREATOR                         ║
+║        Crea proyecto y popula con backlog                ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+EOF
+    echo ""
+}
+
+check_gh_cli() {
+    if ! command -v gh &> /dev/null; then
+        error "GitHub CLI (gh) no está instalado"
+        echo ""
+        info "Instala GitHub CLI:"
+        echo "  Debian/Ubuntu: sudo apt install gh"
+        echo "  Arch: sudo pacman -S github-cli"
+        echo "  macOS: brew install gh"
+        echo ""
+        info "Más info: https://cli.github.com/"
+        exit 1
+    fi
+
+    # Verificar autenticación
+    if ! gh auth status &> /dev/null; then
+        warn "No estás autenticado en GitHub"
+        echo ""
+        read -p "¿Quieres autenticarte ahora? (Y/n): " -r auth_now
+
+        if [[ ! $auth_now =~ ^[Nn]$ ]]; then
+            gh auth login
+        else
+            exit 1
+        fi
+    fi
+
+    log "GitHub CLI configurado correctamente"
+}
+
+check_repo() {
+    local project_dir="${1:-.}"
+
+    cd "$project_dir"
+
+    if [ ! -d ".git" ]; then
+        warn "No es un repositorio Git"
+        read -p "¿Inicializar Git? (Y/n): " -r init_git
+
+        if [[ ! $init_git =~ ^[Nn]$ ]]; then
+            git init
+            log "Repositorio Git inicializado"
+        else
+            return 1
+        fi
+    fi
+
+    # Verificar si tiene remote
+    if ! git remote get-url origin &> /dev/null; then
+        warn "No hay remote de GitHub configurado"
+        echo ""
+        read -p "¿Crear repositorio en GitHub? (Y/n): " -r create_repo
+
+        if [[ ! $create_repo =~ ^[Nn]$ ]]; then
+            local repo_name=$(basename "$(pwd)")
+
+            read -p "¿Repositorio público o privado? (public/private) [private]: " -r visibility
+            visibility=${visibility:-private}
+
+            gh repo create "$repo_name" --"$visibility" --source=. --remote=origin
+
+            log "Repositorio GitHub creado"
+        else
+            return 1
+        fi
+    fi
+
+    log "Repositorio GitHub configurado"
+    return 0
+}
+
+parse_backlog() {
+    local backlog_file="${1:-BACKLOG.md}"
+
+    if [ ! -f "$backlog_file" ]; then
+        warn "BACKLOG.md no encontrado"
+        info "Ejecuta primero: generate-backlog"
+        exit 1
+    fi
+
+    info "Parseando $backlog_file..."
+
+    # Extraer fases y tareas
+    # Este es un parser simple, puede mejorarse
+    grep -E "^## |^- \[ \]" "$backlog_file" | sed 's/^## /PHASE: /' | sed 's/^- \[ \] /TASK: /'
+}
+
+create_github_project() {
+    local project_dir="${1:-.}"
+    local project_name="$2"
+
+    cd "$project_dir"
+
+    info "Creando GitHub Project: $project_name - Infrastructure"
+
+    # Obtener owner/repo
+    local repo_url=$(git remote get-url origin)
+    local repo_full=$(echo "$repo_url" | sed -E 's|.*github.com[:/](.*)\.git|\1|')
+
+    info "Repositorio: $repo_full"
+
+    # Crear proyecto (GitHub Projects v2)
+    # Nota: gh project create requiere extensión gh-project
+    # Vamos a crear issues por ahora y sugerir crear proyecto manualmente
+
+    warn "Creación automática de GitHub Projects v2 requiere extensión adicional"
+    echo ""
+    info "Voy a crear los issues organizados por labels"
+    echo ""
+
+    # Crear labels
+    create_labels "$repo_full"
+
+    # Crear issues desde backlog
+    create_issues_from_backlog "$repo_full" "${project_dir}/BACKLOG.md"
+
+    echo ""
+    log "Issues creados exitosamente"
+    echo ""
+    info "Para crear el GitHub Project:"
+    echo "  1. Ve a: https://github.com/$repo_full/projects"
+    echo "  2. Click en 'New project'"
+    echo "  3. Selecciona 'Board' o 'Table'"
+    echo "  4. Agrega los issues creados"
+    echo ""
+    info "O instala la extensión gh-project:"
+    echo "  gh extension install github/gh-project"
+}
+
+create_labels() {
+    local repo="$1"
+
+    info "Creando labels..."
+
+    # Labels para categorizar
+    local labels=(
+        "infrastructure:0066cc:Tareas de infraestructura"
+        "database:1d76db:Base de datos y migraciones"
+        "security:d73a4a:Seguridad y autenticación"
+        "testing:0e8a16:Tests y QA"
+        "ci-cd:f9d0c4:CI/CD y deployment"
+        "monitoring:fbca04:Monitoring y observabilidad"
+        "documentation:0075ca:Documentación"
+        "phase-1:ededed:Fase 1"
+        "phase-2:ededed:Fase 2"
+        "phase-3:ededed:Fase 3"
+    )
+
+    for label_def in "${labels[@]}"; do
+        IFS=':' read -r name color description <<< "$label_def"
+        gh label create "$name" --color "$color" --description "$description" --repo "$repo" 2>/dev/null || true
+    done
+
+    log "Labels creados"
+}
+
+create_issues_from_backlog() {
+    local repo="$1"
+    local backlog_file="$2"
+
+    info "Creando issues desde backlog..."
+
+    local current_phase=""
+    local current_section=""
+    local phase_number=1
+    local issue_count=0
+
+    # Leer backlog línea por línea
+    while IFS= read -r line; do
+        # Detectar fase
+        if [[ $line =~ ^##[[:space:]].*Phase[[:space:]]([0-9]+) ]]; then
+            current_phase="${BASH_REMATCH[1]}"
+            current_section=$(echo "$line" | sed 's/^## //' | sed 's/ (Sprint.*//')
+            info "Procesando: $current_section"
+            continue
+        fi
+
+        # Detectar sección
+        if [[ $line =~ ^###[[:space:]](.*) ]]; then
+            current_section="${BASH_REMATCH[1]}"
+            continue
+        fi
+
+        # Detectar tarea
+        if [[ $line =~ ^-[[:space:]]\[[[:space:]]\][[:space:]]\*\*(.*)\*\* ]]; then
+            local task_title="${BASH_REMATCH[1]}"
+
+            # Determinar labels
+            local labels="phase-$current_phase"
+
+            case "$current_section" in
+                *Infrastructure*|*Docker*) labels="$labels,infrastructure" ;;
+                *Database*|*Eloquent*) labels="$labels,database" ;;
+                *Security*|*Auth*) labels="$labels,security" ;;
+                *Testing*|*Test*) labels="$labels,testing" ;;
+                *CI*|*CD*|*Deploy*) labels="$labels,ci-cd" ;;
+                *Monitor*|*Logging*) labels="$labels,monitoring" ;;
+                *Documentation*|*Docs*) labels="$labels,documentation" ;;
+            esac
+
+            # Crear issue (solo las tareas principales)
+            if [ $((issue_count % 3)) -eq 0 ] || [ "$current_phase" = "1" ]; then
+                gh issue create \
+                    --repo "$repo" \
+                    --title "$task_title" \
+                    --label "$labels" \
+                    --body "**Fase**: $current_section
+
+**Descripción**:
+Implementar $task_title
+
+**Criterios de aceptación**:
+- [ ] Implementado
+- [ ] Documentado
+- [ ] Tests agregados (si aplica)
+
+---
+_Auto-generado desde BACKLOG.md_" &> /dev/null
+
+                ((issue_count++))
+            fi
+        fi
+
+    done < "$backlog_file"
+
+    log "Creados $issue_count issues"
+}
+
+#===============================================================================
+# Main
+#===============================================================================
+
+main() {
+    show_banner
+
+    # Verificar requisitos
+    check_gh_cli
+
+    # Obtener directorio del proyecto
+    local project_dir="${1:-.}"
+
+    if [ ! -d "$project_dir" ]; then
+        error "Directorio no existe: $project_dir"
+        exit 1
+    fi
+
+    cd "$project_dir"
+
+    # Verificar/crear repo
+    if ! check_repo "."; then
+        error "No se pudo configurar repositorio GitHub"
+        exit 1
+    fi
+
+    # Obtener nombre del proyecto
+    local project_name=$(basename "$(pwd)")
+
+    # Verificar que existe BACKLOG.md
+    if [ ! -f "BACKLOG.md" ]; then
+        warn "BACKLOG.md no encontrado"
+        read -p "¿Generar backlog ahora? (Y/n): " -r gen_backlog
+
+        if [[ ! $gen_backlog =~ ^[Nn]$ ]]; then
+            if [ -f "$(dirname "$0")/generate-backlog" ]; then
+                "$(dirname "$0")/generate-backlog" "."
+            else
+                error "generate-backlog no encontrado"
+                exit 1
+            fi
+        else
+            exit 1
+        fi
+    fi
+
+    # Crear proyecto e issues
+    echo ""
+    create_github_project "." "$project_name"
+
+    # Resumen final
+    echo ""
+    echo -e "${CYAN}${BOLD}═══════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}${BOLD}¡GitHub Project configurado!${NC}"
+    echo -e "${CYAN}${BOLD}═══════════════════════════════════════════════════${NC}"
+    echo ""
+
+    local repo_url=$(git remote get-url origin | sed 's/git@github.com:/https:\/\/github.com\//' | sed 's/\.git$//')
+
+    echo -e "  📋 Issues: ${BLUE}$repo_url/issues${NC}"
+    echo -e "  🚀 Projects: ${BLUE}$repo_url/projects${NC}"
+    echo ""
+}
+
+# Ejecutar
+main "$@"

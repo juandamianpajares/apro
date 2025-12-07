@@ -91,9 +91,37 @@ if [ "$selection" = "n" ] || [ "$selection" = "N" ]; then
     read -p "Nombre del nuevo proyecto: " new_project
     mkdir -p "$PROJECTS_DIR/$new_project"
     cd "$PROJECTS_DIR/$new_project"
+
+    # Inicializar Git
     git init
+
+    # Crear README básico
     echo "# $new_project" > README.md
-    echo "Proyecto creado: $PROJECTS_DIR/$new_project"
+    echo "" >> README.md
+    echo "## Quick Start" >> README.md
+    echo "" >> README.md
+    echo "TODO: Add setup instructions" >> README.md
+
+    echo -e "${GREEN}✓ Proyecto creado: $PROJECTS_DIR/$new_project${NC}"
+    echo ""
+
+    # Preguntar si quiere generar backlog
+    read -p "¿Generar backlog de infraestructura? (Y/n): " -r gen_backlog
+
+    if [[ ! $gen_backlog =~ ^[Nn]$ ]]; then
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [ -f "$SCRIPT_DIR/generate-backlog" ]; then
+            echo ""
+            "$SCRIPT_DIR/generate-backlog" "."
+        fi
+    fi
+
+    echo ""
+    echo -e "${CYAN}Comandos útiles:${NC}"
+    echo "  generate-backlog     - Generar backlog de infraestructura"
+    echo "  create-github-project - Crear GitHub Project con issues"
+    echo "  apro-manage          - Gestionar proyecto"
+    echo ""
 
     # Abrir en directorio
     cd "$PROJECTS_DIR/$new_project"

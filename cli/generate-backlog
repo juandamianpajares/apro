@@ -1,0 +1,255 @@
+#!/bin/bash
+
+#===============================================================================
+# Generate Backlog - Generador automático de backlog de infraestructura
+# Crea un backlog completo basado en el tipo de proyecto
+#===============================================================================
+
+set -euo pipefail
+
+# Colores
+readonly GREEN='\033[0;32m'
+readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
+readonly YELLOW='\033[1;33m'
+readonly BOLD='\033[1m'
+readonly NC='\033[0m'
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TEMPLATES_DIR="$SCRIPT_DIR/templates"
+
+#===============================================================================
+# Funciones
+#===============================================================================
+
+log() {
+    echo -e "${GREEN}✓ $1${NC}"
+}
+
+info() {
+    echo -e "${BLUE}ℹ $1${NC}"
+}
+
+warn() {
+    echo -e "${YELLOW}⚠ $1${NC}"
+}
+
+show_banner() {
+    clear
+    cat <<'EOF'
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║        📋 BACKLOG GENERATOR                              ║
+║        Generador automático de tareas IaC                ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+EOF
+    echo ""
+}
+
+detect_project_type() {
+    local project_dir="${1:-.}"
+
+    if [ -f "$project_dir/package.json" ]; then
+        # Verificar si es Next.js
+        if grep -q "\"next\"" "$project_dir/package.json" 2>/dev/null; then
+            echo "nextjs"
+            return
+        fi
+        echo "nodejs"
+        return
+    fi
+
+    if [ -f "$project_dir/composer.json" ]; then
+        # Verificar si es Laravel
+        if grep -q "laravel/framework" "$project_dir/composer.json" 2>/dev/null; then
+            echo "laravel"
+            return
+        fi
+        echo "php"
+        return
+    fi
+
+    if [ -f "$project_dir/requirements.txt" ] || [ -f "$project_dir/setup.py" ]; then
+        echo "python"
+        return
+    fi
+
+    if [ -f "$project_dir/go.mod" ]; then
+        echo "go"
+        return
+    fi
+
+    if [ -f "$project_dir/Cargo.toml" ]; then
+        echo "rust"
+        return
+    fi
+
+    echo "generic"
+}
+
+get_project_version() {
+    local project_dir="${1:-.}"
+    local project_type="$2"
+
+    case "$project_type" in
+        nextjs)
+            grep '"next"' "$project_dir/package.json" 2>/dev/null | sed 's/.*"next": "\^*\([^"]*\)".*/\1/' || echo "14.x"
+            ;;
+        laravel)
+            grep '"laravel/framework"' "$project_dir/composer.json" 2>/dev/null | sed 's/.*"\^*\([^"]*\)".*/\1/' || echo "11.x"
+            ;;
+        *)
+            echo "latest"
+            ;;
+    esac
+}
+
+generate_backlog() {
+    local project_dir="${1:-.}"
+    local project_name="$2"
+    local project_type="$3"
+
+    # Determinar template
+    local template_file=""
+    case "$project_type" in
+        nextjs)
+            template_file="$TEMPLATES_DIR/backlog-nextjs.md"
+            ;;
+        laravel)
+            template_file="$TEMPLATES_DIR/backlog-laravel.md"
+            ;;
+        *)
+            template_file="$TEMPLATES_DIR/backlog-generic.md"
+            ;;
+    esac
+
+    if [ ! -f "$template_file" ]; then
+        warn "Template no encontrado: $template_file"
+        template_file="$TEMPLATES_DIR/backlog-generic.md"
+    fi
+
+    # Variables para reemplazo
+    local date=$(date +"%Y-%m-%d")
+    local version=$(get_project_version "$project_dir" "$project_type")
+
+    # Generar backlog
+    local output_file="$project_dir/BACKLOG.md"
+
+    sed -e "s/{{PROJECT_NAME}}/$project_name/g" \
+        -e "s/{{DATE}}/$date/g" \
+        -e "s/{{PROJECT_TYPE}}/$project_type/g" \
+        -e "s/{{NEXT_VERSION}}/$version/g" \
+        -e "s/{{LARAVEL_VERSION}}/$version/g" \
+        -e "s/{{PHP_VERSION}}/8.2/g" \
+        "$template_file" > "$output_file"
+
+    log "Backlog generado: $output_file"
+}
+
+create_todo_file() {
+    local project_dir="${1:-.}"
+
+    cat > "$project_dir/TODO.md" <<'EOF'
+# TODO - Quick Tasks
+
+> Lista rápida de tareas pendientes
+> Para backlog completo de infraestructura, ver BACKLOG.md
+
+## 🔥 Urgente
+
+- [ ]
+
+## 📝 Esta Semana
+
+- [ ]
+
+## 💡 Ideas
+
+- [ ]
+
+## 🐛 Bugs
+
+- [ ]
+
+## 📚 Investigar
+
+- [ ]
+
+---
+
+**Última actualización**:
+EOF
+
+    log "TODO.md creado"
+}
+
+#===============================================================================
+# Main
+#===============================================================================
+
+main() {
+    show_banner
+
+    # Obtener directorio del proyecto
+    local project_dir="${1:-.}"
+
+    if [ ! -d "$project_dir" ]; then
+        warn "Directorio no existe: $project_dir"
+        exit 1
+    fi
+
+    cd "$project_dir"
+
+    # Obtener nombre del proyecto
+    local project_name=$(basename "$(pwd)")
+    info "Proyecto: $project_name"
+
+    # Detectar tipo de proyecto
+    local project_type=$(detect_project_type ".")
+    info "Tipo detectado: $project_type"
+
+    # Generar backlog
+    echo ""
+    info "Generando backlog de infraestructura..."
+    generate_backlog "." "$project_name" "$project_type"
+
+    # Crear TODO.md si no existe
+    if [ ! -f "TODO.md" ]; then
+        info "Creando TODO.md..."
+        create_todo_file "."
+    fi
+
+    # Mostrar resumen
+    echo ""
+    echo -e "${CYAN}${BOLD}═══════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}${BOLD}Archivos creados:${NC}"
+    echo -e "${CYAN}${BOLD}═══════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  📋 ${GREEN}BACKLOG.md${NC} - Backlog completo de infraestructura"
+    echo -e "  ✓ ${GREEN}TODO.md${NC} - Tareas rápidas del día a día"
+    echo ""
+
+    # Sugerir próximos pasos
+    echo -e "${YELLOW}${BOLD}Próximos pasos:${NC}"
+    echo ""
+    echo -e "  1. Revisa ${BOLD}BACKLOG.md${NC} para ver todas las tareas"
+    echo -e "  2. Usa ${BOLD}TODO.md${NC} para tareas rápidas"
+    echo -e "  3. Ejecuta ${BOLD}create-github-project${NC} para crear GitHub Project"
+    echo ""
+
+    # Preguntar si quiere crear GitHub Project
+    read -p "¿Quieres crear GitHub Project ahora? (y/N): " -r create_gh
+
+    if [[ $create_gh =~ ^[Yy]$ ]]; then
+        if [ -f "$SCRIPT_DIR/create-github-project" ]; then
+            "$SCRIPT_DIR/create-github-project" "."
+        else
+            warn "create-github-project no encontrado"
+            info "Puedes ejecutarlo manualmente después"
+        fi
+    fi
+}
+
+# Ejecutar
+main "$@"
