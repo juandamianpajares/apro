@@ -1,0 +1,261 @@
+#!/bin/bash
+
+#===============================================================================
+# APRO - Advanced Provisioning & Orchestration
+# Multi-Cloud Infrastructure Platform
+# Version: 2.0.0-cloud
+#===============================================================================
+
+set -euo pipefail
+
+# Version
+readonly VERSION="2.0.0-cloud"
+
+# Colores
+readonly GREEN='\033[0;32m'
+readonly RED='\033[0;31m'
+readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
+readonly YELLOW='\033[1;33m'
+readonly BOLD='\033[1m'
+readonly NC='\033[0m'
+
+# Paths
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly LIB_DIR="$SCRIPT_DIR/../lib"
+readonly TF_DIR="$SCRIPT_DIR/../terraform"
+readonly CONFIG_DIR="$SCRIPT_DIR/../config"
+
+# Source libraries
+source "$LIB_DIR/cloud-core.sh"
+
+#===============================================================================
+# Banner
+#===============================================================================
+
+show_banner() {
+    clear
+    cat <<'EOF'
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║     █████╗ ██████╗ ██████╗  ██████╗     ██████╗██╗      ██████╗  ║
+║    ██╔══██╗██╔══██╗██╔══██╗██╔═══██╗   ██╔════╝██║     ██╔═══██╗ ║
+║    ███████║██████╔╝██████╔╝██║   ██║   ██║     ██║     ██║   ██║ ║
+║    ██╔══██║██╔═══╝ ██╔══██╗██║   ██║   ██║     ██║     ██║   ██║ ║
+║    ██║  ██║██║     ██║  ██║╚██████╔╝   ╚██████╗███████╗╚██████╔╝ ║
+║    ╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝ ╚═════╝     ╚═════╝╚══════╝ ╚═════╝  ║
+║                                                                   ║
+║              Multi-Cloud Infrastructure Platform                 ║
+║                        v$VERSION                                    ║
+╚═══════════════════════════════════════════════════════════════════╝
+EOF
+    echo ""
+}
+
+#===============================================================================
+# Help
+#===============================================================================
+
+show_help() {
+    cat <<EOF
+${BOLD}USAGE:${NC}
+  apro <command> [options]
+
+${BOLD}CLOUD COMMANDS:${NC}
+  ${CYAN}init${NC} <project>              Initialize cloud infrastructure
+    --provider=aws|gcp        Cloud provider (required)
+    --type=nextjs|laravel     Project type (required)
+    --region=<region>         Cloud region
+    --env=dev|staging|prod    Environment (default: dev)
+
+  ${CYAN}deploy${NC} <env>                 Deploy to cloud environment
+    --provider=aws|gcp        Override provider
+    --dry-run                 Show what would be deployed
+
+  ${CYAN}destroy${NC} <env>                Destroy cloud resources
+    --force                   Skip confirmation
+
+  ${CYAN}migrate${NC}                      Migrate between cloud providers
+    --from=aws|gcp            Source provider
+    --to=aws|gcp              Target provider
+
+  ${CYAN}scale${NC} <env>                  Scale application
+    --min=<num>               Minimum instances
+    --max=<num>               Maximum instances
+
+  ${CYAN}status${NC}                       Show infrastructure status
+  ${CYAN}logs${NC} [service]               View application logs
+    --follow                  Stream logs
+    --tail=<num>              Number of lines
+
+  ${CYAN}rollback${NC} <version>           Rollback to previous version
+
+${BOLD}PROJECT COMMANDS:${NC}
+  ${CYAN}project list${NC}                 List all projects
+  ${CYAN}project new${NC} <name>           Create new project
+  ${CYAN}project switch${NC} [name]        Switch to project
+  ${CYAN}project backlog${NC}              Generate infrastructure backlog
+
+${BOLD}LOCAL COMMANDS:${NC}
+  ${CYAN}local start${NC}                  Start local environment
+  ${CYAN}local stop${NC}                   Stop local environment
+  ${CYAN}local logs${NC}                   View local logs
+  ${CYAN}local test${NC}                   Run tests locally
+
+${BOLD}CONFIG COMMANDS:${NC}
+  ${CYAN}config show${NC}                  Show current configuration
+  ${CYAN}config set${NC} <key> <value>     Set configuration value
+  ${CYAN}config init${NC}                  Initialize apro.config.yml
+
+${BOLD}EXAMPLES:${NC}
+  # Initialize Next.js project for AWS
+  apro init my-app --provider=aws --type=nextjs --region=us-east-1
+
+  # Deploy to production
+  apro deploy prod
+
+  # View logs
+  apro logs --follow
+
+  # Scale app
+  apro scale prod --min=2 --max=10
+
+  # Migrate from AWS to GCP
+  apro migrate --from=aws --to=gcp
+
+${BOLD}MORE INFO:${NC}
+  Documentation: /home/user/apro/docs/
+  GitHub: https://github.com/juandamianpajares/apro
+  Version: $VERSION
+EOF
+}
+
+#===============================================================================
+# Main Router
+#===============================================================================
+
+main() {
+    # No arguments = show banner + help
+    if [ $# -eq 0 ]; then
+        show_banner
+        show_help
+        exit 0
+    fi
+
+    local command="$1"
+    shift
+
+    case "$command" in
+        # Cloud commands
+        init)
+            source "$LIB_DIR/cloud-core.sh"
+            cloud_init "$@"
+            ;;
+        deploy)
+            source "$LIB_DIR/cloud-core.sh"
+            cloud_deploy "$@"
+            ;;
+        destroy)
+            source "$LIB_DIR/cloud-core.sh"
+            cloud_destroy "$@"
+            ;;
+        migrate)
+            source "$LIB_DIR/cloud-core.sh"
+            cloud_migrate "$@"
+            ;;
+        scale)
+            source "$LIB_DIR/cloud-core.sh"
+            cloud_scale "$@"
+            ;;
+        status)
+            source "$LIB_DIR/cloud-core.sh"
+            cloud_status "$@"
+            ;;
+        logs)
+            source "$LIB_DIR/cloud-core.sh"
+            cloud_logs "$@"
+            ;;
+        rollback)
+            source "$LIB_DIR/cloud-core.sh"
+            cloud_rollback "$@"
+            ;;
+
+        # Project commands
+        project)
+            if [ $# -eq 0 ]; then
+                error "Missing project subcommand"
+                exit 1
+            fi
+            local subcommand="$1"
+            shift
+
+            case "$subcommand" in
+                list)
+                    exec "$SCRIPT_DIR/project-status" "$@"
+                    ;;
+                new)
+                    exec "$SCRIPT_DIR/switch-project" "$@"
+                    ;;
+                switch)
+                    exec "$SCRIPT_DIR/switch-project" "$@"
+                    ;;
+                backlog)
+                    exec "$SCRIPT_DIR/generate-backlog" "$@"
+                    ;;
+                *)
+                    error "Unknown project subcommand: $subcommand"
+                    exit 1
+                    ;;
+            esac
+            ;;
+
+        # Local commands
+        local)
+            if [ $# -eq 0 ]; then
+                error "Missing local subcommand"
+                exit 1
+            fi
+            local subcommand="$1"
+            shift
+
+            exec "$SCRIPT_DIR/apro-manage" "$@"
+            ;;
+
+        # Config commands
+        config)
+            source "$LIB_DIR/cloud-core.sh"
+            if [ $# -eq 0 ]; then
+                config_show
+            else
+                local subcommand="$1"
+                shift
+                case "$subcommand" in
+                    show) config_show ;;
+                    set) config_set "$@" ;;
+                    init) config_init ;;
+                    *) error "Unknown config subcommand: $subcommand" && exit 1 ;;
+                esac
+            fi
+            ;;
+
+        # Meta commands
+        version|-v|--version)
+            echo "APRO v$VERSION"
+            ;;
+        help|-h|--help)
+            show_banner
+            show_help
+            ;;
+
+        # Unknown command
+        *)
+            error "Unknown command: $command"
+            echo ""
+            info "Run 'apro help' for usage information"
+            exit 1
+            ;;
+    esac
+}
+
+# Execute
+main "$@"

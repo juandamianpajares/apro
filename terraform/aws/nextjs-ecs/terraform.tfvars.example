@@ -1,0 +1,113 @@
+# Example Terraform Variables for Next.js on AWS ECS
+# Copy this file to terraform.tfvars and customize for your environment
+
+#===============================================================================
+# General Configuration
+#===============================================================================
+
+project_name = "my-nextjs-app"
+environment  = "dev"  # dev, staging, production
+region       = "us-east-1"
+
+tags = {
+  Team        = "engineering"
+  CostCenter  = "product"
+  ManagedBy   = "APRO"
+}
+
+#===============================================================================
+# Networking
+#===============================================================================
+
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Enable NAT Gateway for Fargate (required for pulling images from ECR)
+enable_nat_gateway = true
+
+# Use single NAT Gateway to save costs in dev/staging (~$32/month vs ~$64/month)
+# Set to false for production to have NAT redundancy
+single_nat_gateway = true
+
+#===============================================================================
+# Application Configuration
+#===============================================================================
+
+app_port   = 3000
+app_cpu    = 512   # 0.5 vCPU (256, 512, 1024, 2048, 4096)
+app_memory = 1024  # 1 GB
+
+# Scaling
+desired_count = 2   # Initial number of tasks
+min_count     = 1   # Minimum tasks (auto-scaling)
+max_count     = 10  # Maximum tasks (auto-scaling)
+
+#===============================================================================
+# Monitoring & Logging
+#===============================================================================
+
+enable_container_insights = true   # Container Insights (additional cost)
+log_retention_days        = 7      # CloudWatch log retention
+enable_ecs_exec           = false  # Enable for debugging (security risk)
+
+#===============================================================================
+# Database (Optional)
+#===============================================================================
+
+enable_rds              = false  # Set to true to create RDS instance
+db_engine               = "mysql"
+db_engine_version       = "8.0"
+db_instance_class       = "db.t3.micro"
+db_allocated_storage    = 20
+db_multi_az             = false  # Set to true for production
+db_backup_retention_days = 7
+
+#===============================================================================
+# SSL/TLS (Optional)
+#===============================================================================
+
+# Uncomment and add your ACM certificate ARN for HTTPS
+# certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc123..."
+
+#===============================================================================
+# Environment-Specific Examples
+#===============================================================================
+
+## Development
+# project_name            = "myapp"
+# environment             = "dev"
+# app_cpu                 = 256
+# app_memory              = 512
+# desired_count           = 1
+# min_count               = 1
+# max_count               = 2
+# single_nat_gateway      = true
+# enable_container_insights = false
+# enable_rds              = false
+
+## Staging
+# project_name            = "myapp"
+# environment             = "staging"
+# app_cpu                 = 512
+# app_memory              = 1024
+# desired_count           = 2
+# min_count               = 1
+# max_count               = 5
+# single_nat_gateway      = true
+# enable_container_insights = true
+# enable_rds              = true
+# db_multi_az             = false
+
+## Production
+# project_name            = "myapp"
+# environment             = "production"
+# app_cpu                 = 1024
+# app_memory              = 2048
+# desired_count           = 3
+# min_count               = 2
+# max_count               = 20
+# single_nat_gateway      = false  # NAT redundancy
+# enable_container_insights = true
+# enable_rds              = true
+# db_multi_az             = true   # High availability
+# db_backup_retention_days = 30
