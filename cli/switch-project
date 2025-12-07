@@ -1,0 +1,161 @@
+#!/bin/bash
+
+#===============================================================================
+# Project Switcher - Para creativos con múltiples proyectos
+# Cambia rápidamente entre proyectos sin recordar rutas
+#===============================================================================
+
+set -euo pipefail
+
+# Colores
+readonly GREEN='\033[0;32m'
+readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
+readonly YELLOW='\033[1;33m'
+readonly BOLD='\033[1m'
+readonly NC='\033[0m'
+
+PROJECTS_DIR="/home/user/apro/projects"
+
+# Banner
+clear
+cat <<'EOF'
+╔═══════════════════════════════════════════════════╗
+║                                                   ║
+║        🚀 PROJECT SWITCHER                       ║
+║        Cambio rápido entre proyectos             ║
+║                                                   ║
+╚═══════════════════════════════════════════════════╝
+EOF
+echo ""
+
+# Listar proyectos disponibles
+echo -e "${CYAN}${BOLD}Proyectos disponibles:${NC}\n"
+
+projects=()
+count=1
+
+for dir in "$PROJECTS_DIR"/*/; do
+    if [ -d "$dir" ]; then
+        project_name=$(basename "$dir")
+        projects+=("$project_name")
+
+        # Detectar tipo de proyecto
+        project_type=""
+        status="💤"
+
+        if [ -f "$dir/docker-compose.yml" ] || [ -f "$dir/docker-compose.dev.yml" ]; then
+            project_type="Docker"
+            # Verificar si está corriendo
+            cd "$dir"
+            if docker compose ps 2>/dev/null | grep -q "Up"; then
+                status="✅"
+            fi
+        elif [ -f "$dir/package.json" ]; then
+            project_type="Node.js"
+        elif [ -f "$dir/composer.json" ]; then
+            project_type="PHP"
+        else
+            project_type="General"
+        fi
+
+        # Última modificación
+        last_commit=$(cd "$dir" && git log -1 --format="%cr" 2>/dev/null || echo "Sin commits")
+
+        echo -e "  ${BOLD}$count)${NC} ${GREEN}$project_name${NC}"
+        echo -e "     Tipo: $project_type | Estado: $status | Última actividad: $last_commit"
+        echo ""
+
+        ((count++))
+    fi
+done
+
+if [ ${#projects[@]} -eq 0 ]; then
+    echo -e "${YELLOW}No hay proyectos en $PROJECTS_DIR${NC}"
+    exit 0
+fi
+
+# Opciones adicionales
+echo -e "  ${BOLD}n)${NC} Crear nuevo proyecto"
+echo -e "  ${BOLD}0)${NC} Salir"
+echo ""
+
+# Selección
+read -p "Selecciona un proyecto: " selection
+
+if [ "$selection" = "0" ]; then
+    exit 0
+fi
+
+if [ "$selection" = "n" ] || [ "$selection" = "N" ]; then
+    read -p "Nombre del nuevo proyecto: " new_project
+    mkdir -p "$PROJECTS_DIR/$new_project"
+    cd "$PROJECTS_DIR/$new_project"
+    git init
+    echo "# $new_project" > README.md
+    echo "Proyecto creado: $PROJECTS_DIR/$new_project"
+
+    # Abrir en directorio
+    cd "$PROJECTS_DIR/$new_project"
+    exec $SHELL
+fi
+
+# Validar selección
+if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -gt "${#projects[@]}" ]; then
+    echo -e "${YELLOW}Selección inválida${NC}"
+    exit 1
+fi
+
+# Cambiar al proyecto seleccionado
+selected_project="${projects[$((selection-1))]}"
+project_path="$PROJECTS_DIR/$selected_project"
+
+clear
+echo -e "${GREEN}${BOLD}Cambiando a: $selected_project${NC}\n"
+
+cd "$project_path"
+
+# Mostrar información del proyecto
+if [ -f "README.md" ]; then
+    echo -e "${CYAN}${BOLD}Descripción:${NC}"
+    head -n 5 README.md
+    echo ""
+fi
+
+# Mostrar estado de Git
+if [ -d ".git" ]; then
+    echo -e "${CYAN}${BOLD}Git Status:${NC}"
+    git status -s
+    echo ""
+
+    echo -e "${CYAN}${BOLD}Último commit:${NC}"
+    git log -1 --oneline
+    echo ""
+fi
+
+# Mostrar servicios Docker si existen
+if [ -f "docker-compose.yml" ] || [ -f "docker-compose.dev.yml" ]; then
+    echo -e "${CYAN}${BOLD}Servicios Docker:${NC}"
+    docker compose ps 2>/dev/null || echo "Servicios detenidos"
+    echo ""
+
+    echo -e "${YELLOW}Comandos útiles:${NC}"
+    echo "  - apro-manage           : Abrir menú de gestión"
+    echo "  - docker compose up -d  : Iniciar servicios"
+    echo "  - docker compose logs -f: Ver logs"
+    echo ""
+fi
+
+# Mostrar TODOs si existen
+if [ -f "TODO.md" ]; then
+    echo -e "${CYAN}${BOLD}Tareas pendientes:${NC}"
+    head -n 10 TODO.md
+    echo ""
+fi
+
+echo -e "${GREEN}${BOLD}¡Listo! Estás en:${NC} $project_path"
+echo ""
+
+# Cambiar al proyecto (iniciar nueva shell en ese directorio)
+cd "$project_path"
+exec $SHELL
