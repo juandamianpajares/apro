@@ -1,0 +1,161 @@
+version: '3.9'
+
+# ============================================================================
+# Docker Compose para DESARROLLO - DALINTEX Stock Management
+# Con hot-reload, debugging y herramientas de desarrollo
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # MySQL Database (Desarrollo)
+  # ==========================================================================
+  db:
+    image: mysql:8.0
+    container_name: dalintex-db-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-DevPass123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-dalintex_stock_dev}
+      MYSQL_USER: ${MYSQL_USER:-dalintex_dev}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-DevPass123}
+      TZ: America/Argentina/Buenos_Aires
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
+    networks:
+      - dalintex-dev-network
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pDevPass123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ==========================================================================
+  # Next.js Application (Desarrollo con hot-reload)
+  # ==========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dalintex-app-dev
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: mysql://${MYSQL_USER:-dalintex_dev}:${MYSQL_PASSWORD:-DevPass123}@db:3306/${MYSQL_DATABASE:-dalintex_stock_dev}
+
+      # App Config
+      NODE_ENV: development
+      PORT: 3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+
+      # Development
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+
+      # Auth (dev)
+      JWT_SECRET: dev-secret-key-not-for-production
+      NEXTAUTH_SECRET: dev-secret-key-not-for-production
+      NEXTAUTH_URL: http://localhost:3000
+
+      # Redis (opcional)
+      REDIS_URL: redis://redis:6379
+
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dalintex-dev-network
+    volumes:
+      # Mount código fuente para hot-reload
+      - ./src:/app/src:delegated
+      - ./public:/app/public:delegated
+      - ./package.json:/app/package.json:ro
+      - ./next.config.js:/app/next.config.js:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./tailwind.config.ts:/app/tailwind.config.ts:ro
+      - ./postcss.config.js:/app/postcss.config.js:ro
+      # Excluir node_modules del host
+      - /app/node_modules
+      - /app/.next
+
+  # ==========================================================================
+  # phpMyAdmin (Siempre activo en desarrollo)
+  # ==========================================================================
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: dalintex-phpmyadmin-dev
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: DevPass123
+      UPLOAD_LIMIT: 300M
+      PMA_ARBITRARY: 1
+    ports:
+      - "${PHPMYADMIN_PORT:-8080}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dalintex-dev-network
+
+  # ==========================================================================
+  # Redis (Para desarrollo con cache)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: dalintex-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - dalintex-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================================================
+  # Mailhog (Captura emails en desarrollo)
+  # ==========================================================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: dalintex-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - dalintex-dev-network
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  dalintex-dev-network:
+    driver: bridge
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  mysql_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local

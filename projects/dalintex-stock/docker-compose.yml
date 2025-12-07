@@ -1,0 +1,165 @@
+version: '3.9'
+
+# ============================================================================
+# Docker Compose para DALINTEX Stock Management
+# Incluye: Next.js App + MySQL + phpMyAdmin + Redis (opcional)
+# Compatible con Debian 12
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # MySQL Database
+  # ==========================================================================
+  db:
+    image: mysql:8.0
+    container_name: dalintex-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dalintex_root_2024}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-dalintex_stock}
+      MYSQL_USER: ${MYSQL_USER:-dalintex}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-dalintex_pass_2024}
+      TZ: America/Argentina/Buenos_Aires
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+      - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
+    networks:
+      - dalintex-network
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=200
+      --innodb_buffer_pool_size=256M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-dalintex_root_2024}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================================
+  # Next.js Application (Producción)
+  # ==========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    container_name: dalintex-app
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: mysql://${MYSQL_USER:-dalintex}:${MYSQL_PASSWORD:-dalintex_pass_2024}@db:3306/${MYSQL_DATABASE:-dalintex_stock}
+
+      # App Config
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000/api}
+
+      # JWT/Auth Secret
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production-please-use-openssl-rand}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change-this-in-production-please}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+
+      # Email Config (opcional)
+      EMAIL_HOST: ${EMAIL_HOST:-smtp.gmail.com}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@dalintex.com}
+
+      # Redis (opcional - para cache/sessions)
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dalintex-network
+    volumes:
+      # Logs y uploads (persistentes)
+      - app_data:/app/data
+      - app_uploads:/app/public/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ==========================================================================
+  # phpMyAdmin (Opcional - solo para desarrollo/staging)
+  # ==========================================================================
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: dalintex-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: ${MYSQL_USER:-dalintex}
+      PMA_PASSWORD: ${MYSQL_PASSWORD:-dalintex_pass_2024}
+      UPLOAD_LIMIT: 300M
+    ports:
+      - "${PHPMYADMIN_PORT:-8080}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dalintex-network
+    profiles:
+      - dev
+      - staging
+
+  # ==========================================================================
+  # Redis (Opcional - para cache y sessions)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: dalintex-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-dalintex_redis_2024}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - dalintex-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - cache
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  dalintex-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  mysql_data:
+    driver: local
+  app_data:
+    driver: local
+  app_uploads:
+    driver: local
+  redis_data:
+    driver: local
