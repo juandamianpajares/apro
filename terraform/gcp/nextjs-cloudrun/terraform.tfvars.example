@@ -1,0 +1,129 @@
+# Example Terraform Variables for Next.js on GCP Cloud Run
+# Copy this file to terraform.tfvars and customize for your environment
+
+#===============================================================================
+# General Configuration
+#===============================================================================
+
+project_name   = "my-nextjs-app"
+environment    = "dev"  # dev, staging, production
+gcp_project_id = "my-gcp-project-id"
+region         = "us-central1"
+
+labels = {
+  team       = "engineering"
+  cost-center = "product"
+  managed-by = "apro"
+}
+
+#===============================================================================
+# Application Configuration
+#===============================================================================
+
+app_port   = 3000
+app_cpu    = "1"      # 1, 2, 4, or 8 vCPUs
+app_memory = "512Mi"  # 512Mi, 1Gi, 2Gi, 4Gi, 8Gi
+
+# Scaling
+min_instances = 0   # 0 = scale to zero (save costs)
+max_instances = 10  # Maximum concurrent instances
+
+# Performance
+cpu_throttling     = true   # Throttle CPU when idle (recommended for dev)
+startup_cpu_boost  = true   # Boost CPU during startup
+request_timeout    = 300    # Request timeout in seconds
+
+#===============================================================================
+# Access Control
+#===============================================================================
+
+allow_public_access = true  # Allow public internet access
+
+#===============================================================================
+# Networking (Optional)
+#===============================================================================
+
+enable_vpc = false  # Enable if you need private networking to Cloud SQL
+
+# If enable_vpc = true:
+# vpc_cidr           = "10.8.0.0/28"
+# vpc_connector_cidr = "10.8.1.0/28"
+
+#===============================================================================
+# Database (Optional)
+#===============================================================================
+
+enable_cloud_sql = false  # Set to true to create Cloud SQL instance
+
+# If enable_cloud_sql = true:
+# db_version              = "POSTGRES_15"  # or MYSQL_8_0
+# db_tier                 = "db-f1-micro"  # db-f1-micro, db-g1-small, db-custom-1-3840
+# db_disk_size            = 10             # GB
+# db_disk_type            = "PD_SSD"       # PD_SSD or PD_HDD
+# db_high_availability    = false          # true for production
+# db_backup_enabled       = true
+# db_backup_start_time    = "03:00"
+# db_point_in_time_enabled = true
+
+#===============================================================================
+# Load Balancer (Optional)
+#===============================================================================
+
+enable_load_balancer = false  # Enable for custom domain with static IP
+
+#===============================================================================
+# Monitoring
+#===============================================================================
+
+enable_monitoring = true  # Enable uptime checks and alerts
+
+# Notification channels (optional)
+# notification_channels = [
+#   "projects/my-project/notificationChannels/1234567890"
+# ]
+
+#===============================================================================
+# Environment-Specific Examples
+#===============================================================================
+
+## Development
+# project_name         = "myapp"
+# environment          = "dev"
+# gcp_project_id       = "mycompany-dev"
+# app_cpu              = "1"
+# app_memory           = "512Mi"
+# min_instances        = 0     # Scale to zero
+# max_instances        = 5
+# cpu_throttling       = true  # Save costs
+# enable_cloud_sql     = false
+# enable_monitoring    = false # Reduce costs
+
+## Staging
+# project_name         = "myapp"
+# environment          = "staging"
+# gcp_project_id       = "mycompany-staging"
+# app_cpu              = "1"
+# app_memory           = "1Gi"
+# min_instances        = 1     # Always 1 instance
+# max_instances        = 10
+# enable_cloud_sql     = true
+# db_tier              = "db-g1-small"
+# db_high_availability = false
+# enable_monitoring    = true
+
+## Production
+# project_name         = "myapp"
+# environment          = "production"
+# gcp_project_id       = "mycompany-prod"
+# app_cpu              = "2"
+# app_memory           = "2Gi"
+# min_instances        = 2     # Always 2 instances minimum
+# max_instances        = 100
+# cpu_throttling       = false # Max performance
+# enable_cloud_sql     = true
+# db_tier              = "db-custom-2-7680"  # 2 vCPU, 7.6GB RAM
+# db_high_availability = true                 # High availability
+# db_backup_enabled    = true
+# enable_load_balancer = true                 # Custom domain
+# enable_vpc           = true                 # Private networking
+# enable_monitoring    = true
